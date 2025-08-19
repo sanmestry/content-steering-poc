@@ -1,6 +1,6 @@
 # Content Steering Proof of Concept
 
-This project demonstrates a real-time data pipeline for a content steering proof of concept using **Go**, **Apache Kafka**, and **TimescaleDB**. It simulates millions of concurrent clients, ingests session data, and stores it in a time-series database for real-time analytics and dashboarding with **Grafana**.
+This project demonstrates a real-time data pipeline for a content steering proof of concept using **Go**, **Apache Kafka**, and **TimescaleDB**. It simulates concurrent clients, ingests session data, and stores it in a time-series database for real-time analytics and dashboarding with **Grafana**.
 
 ---
 
