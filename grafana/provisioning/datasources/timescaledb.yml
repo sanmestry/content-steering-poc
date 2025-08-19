@@ -6,10 +6,15 @@ datasources:
     access: proxy
     url: timescaledb:5432
     user: user
-    password: password
-    database: sessions
+    secureJsonData:
+      password: 'password'
     isDefault: true
-    version: 16
     jsonData:
+      database: sessions
       timescaledb: true
       sslmode: 'disable'
+      maxOpenConns: 100
+      maxIdleConns: 100
+      maxIdleConnsAuto: true
+      connMaxLifetime: 14400
+      postgresVersion: 1690
