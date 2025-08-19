@@ -23,7 +23,7 @@
   "panels": [
     {
       "datasource": {
-        "type": "grafana-postgresql-datasource",
+        "type": "postgres",
         "uid": "timescaledb"
       },
       "fieldConfig": {
@@ -107,7 +107,7 @@
     },
     {
       "datasource": {
-        "type": "grafana-postgresql-datasource",
+        "type": "postgres",
         "uid": "timescaledb"
       },
       "fieldConfig": {
@@ -181,7 +181,7 @@
         },
         "tooltip": {
           "hideZeros": false,
-          "mode": "single",
+          "mode": "multi",
           "sort": "none"
         }
       },
@@ -190,11 +190,11 @@
         {
           "dataset": "sessions",
           "datasource": {
-            "type": "grafana-postgresql-datasource",
-            "uid": "devdrenzhm1vkb"
+            "type": "postgres",
+            "uid": "timescaledb"
           },
           "editorMode": "code",
-          "format": "table",
+          "format": "time_series",
           "rawQuery": true,
           "rawSql": "SELECT\n    time_bucket('1 minute', time) AS \"time\",\n    asn,\n    (sum(video_profile_kbps) / 1024) AS \"traffic_mbps\"\nFROM content_sessions\nWHERE\n    time BETWEEN $__timeFrom() AND $__timeTo()\nGROUP BY time_bucket('1 minute', time), asn\nORDER BY \"time\";",
           "refId": "A",
@@ -234,6 +234,6 @@
   "timepicker": {},
   "timezone": "browser",
   "title": "Content Steering Dashboard",
-  "uid": "48909f9e-d1d2-47b9-b842-fb8698b62d21",
+  "uid": "a91cdc90-2a51-47b9-b842-fb8698b62d21",
   "version": 3
 }
