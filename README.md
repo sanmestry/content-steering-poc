@@ -99,3 +99,20 @@ time BETWEEN $__timeFrom() AND $__timeTo()
 GROUP BY time_bucket('1 minute', time), asn
 ORDER BY "time";
 ```
+
+### Stopping the Services
+To stop the services, run:
+
+```bash
+docker-compose down
+```
+
+### Conclusion
+This PoC shows that a Kafka-TimescaleDB-Grafana stack is a solid, scalable solution for real-time data.
+
+
+* High-Volume Traffic: The system can handle large data points per minute.
+* Reliability: Kafka acts as a buffer, preventing the database from crashing under heavy load.
+* Performance: TimescaleDB handles all the time-stamped data and complex queries quickly.
+* Live Dashboards: Grafana builds live dashboards so you can see what's happening in real-time.
+* It proves this tech stack can reliably handle huge amounts of data.
