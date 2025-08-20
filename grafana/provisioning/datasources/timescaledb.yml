@@ -4,13 +4,13 @@ datasources:
     uid: timescaledb
     type: postgres
     access: proxy
-    url: timescaledb:5432
-    user: user
+    url: w69vqym57z.fenimbcwxy.tsdb.cloud.timescale.com:30082
+    user: tsdbadmin
     secureJsonData:
-      password: 'password'
+      password: 'yo5zr448xefcovon'
     isDefault: true
     jsonData:
-      database: sessions
+      database: tsdb
       timescaledb: true
       sslmode: 'disable'
       maxOpenConns: 100

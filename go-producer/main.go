@@ -30,22 +30,41 @@ type SessionData struct {
 }
 
 func main() {
-	writer := &kafka.Writer{
-		Addr:         kafka.TCP(brokers...),
-		Topic:        topic,
-		Balancer:     &kafka.LeastBytes{},
-		WriteTimeout: 10 * time.Second,
-		RequiredAcks: kafka.RequiredAcks(1),
-		// Use batching for performance
-		BatchSize:    100,         // Batch up to 100 messages
-		BatchBytes:   10e6,        // or up to 10MB
-		BatchTimeout: time.Second, // or every second
+
+	log.Println("Producer is waiting for 15 seconds to allow Kafka to start up...")
+	time.Sleep(15 * time.Second)
+
+	var writer *kafka.Writer
+	var err error
+	for i := 0; i < 5; i++ {
+		writer = &kafka.Writer{
+			Addr:         kafka.TCP(brokers...),
+			Topic:        topic,
+			Balancer:     &kafka.LeastBytes{},
+			WriteTimeout: 10 * time.Second,
+			RequiredAcks: kafka.RequiredAcks(1),
+			BatchSize:    100,
+			BatchBytes:   10e6,
+			BatchTimeout: time.Second,
+		}
+
+		errs := writer.Stats().Errors
+		if errs == 0 {
+			log.Println("Successfully connected to Kafka.")
+			break
+		}
+		log.Printf("Failed to connect to Kafka (attempt %d/5): %v. Retrying in 5 seconds...", i+1, err)
+		time.Sleep(5 * time.Second)
+	}
+
+	if err != nil {
+		log.Fatalf("Could not connect to Kafka after multiple retries: %v", err)
 	}
 	defer writer.Close()
 
 	log.Println("Starting Kafka producer...")
 
-	const recordsPerMinute = 1000000
+	const recordsPerMinute = 60
 	const recordsPerSecond = recordsPerMinute / 60
 	const totalRecords = recordsPerMinute
 
@@ -61,19 +80,17 @@ func main() {
 		}
 		messages = append(messages, kafka.Message{Value: jsonData})
 
-		// Send a batch every second
 		if len(messages) >= recordsPerSecond {
 			if err := writer.WriteMessages(context.Background(), messages...); err != nil {
 				log.Printf("Failed to write batch: %v\n", err)
 			} else {
 				log.Printf("Successfully sent a batch of %d messages.\n", len(messages))
 			}
-			messages = nil          // Clear the batch for the next second
-			time.Sleep(time.Second) // Control the rate
+			messages = nil
+			time.Sleep(time.Second)
 		}
 	}
 
-	// Send any remaining messages
 	if len(messages) > 0 {
 		if err := writer.WriteMessages(context.Background(), messages...); err != nil {
 			log.Printf("Failed to write final batch: %v\n", err)
