@@ -36,8 +36,8 @@ func main() {
 		ConnectionString: os.Getenv("DB_CONN_STR"),
 		ScyllaHosts:      strings.Split(os.Getenv("SCYLLA_HOSTS"), ","),
 		Keyspace:         "content_steering",
-		WorkerCount:      1, // 100 concurrent clients
-		WriteCount:       1, // 1000 records each
+		WorkerCount:      100,  // 100 concurrent clients
+		WriteCount:       1000, // 1000 records each
 	}
 
 	var wg sync.WaitGroup
