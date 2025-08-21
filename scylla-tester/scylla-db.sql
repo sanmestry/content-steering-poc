@@ -20,5 +20,12 @@ CREATE TABLE IF NOT EXISTS content_sessions (
                                                 PRIMARY KEY ((current_cdn), time, session_id)
     ) WITH CLUSTERING ORDER BY (time DESC);
 
--- Create an index to allow efficient lookups by ASN
-CREATE INDEX IF NOT EXISTS ON content_sessions (asn);
+CREATE TABLE IF NOT EXISTS sessions_by_asn (
+                                               session_id         uuid,
+                                               time               timestamp,
+                                               platform           text,
+                                               asn                int,          -- The partition key
+                                               current_cdn        text,
+                                               video_profile_kbps int,
+                                               PRIMARY KEY ((asn), time, session_id)
+    ) WITH CLUSTERING ORDER BY (time DESC);
