@@ -25,9 +25,10 @@ const (
 )
 
 var (
-	// Use the expanded list of CDNs and new platforms
 	cdns      = []string{"Akamai", "Fastly", "Cloudfront", "Qwilt", "NetSkrt"}
 	platforms = []string{"mobile", "dotcom", "tv"}
+	// NEW: A list of ASNs to query for in the read worker
+	queryASNs = []int{3356, 15169, 7922, 20115, 8121}
 )
 
 // SessionData simulates your session data
@@ -41,45 +42,53 @@ type SessionData struct {
 }
 
 func main() {
+	// --- Read all connection details from environment variables ---
 	scyllaHosts := os.Getenv("SCYLLA_HOSTS")
-	if scyllaHosts == "" {
-		log.Fatal("SCYLLA_HOSTS environment variable not set (e.g., '127.0.0.1')")
+	scyllaUser := os.Getenv("SCYLLA_USER")
+	scyllaPass := os.Getenv("SCYLLA_PASS")
+
+	if scyllaHosts == "" || scyllaUser == "" || scyllaPass == "" {
+		log.Fatal("SCYLLA_HOSTS, SCYLLA_USER, and SCYLLA_PASS environment variables must be set")
 	}
 
 	log.Printf("Starting ScyllaDB load test for %v...", runDuration)
 	log.Printf("Workers: %d, Read Query Interval: %v", workerCount, readInterval)
 
-	// Create a ScyllaDB session
+	// --- Configure the cluster connection ---
 	cluster := gocql.NewCluster(strings.Split(scyllaHosts, ",")...)
 	cluster.Keyspace = keyspace
 	cluster.Consistency = gocql.LocalQuorum
+
+	cluster.Authenticator = gocql.PasswordAuthenticator{
+		Username: scyllaUser,
+		Password: scyllaPass,
+	}
+
 	session, err := cluster.CreateSession()
 	if err != nil {
 		log.Fatalf("Failed to connect to ScyllaDB: %v", err)
 	}
 	defer session.Close()
 
-	// Use a context to control the run duration
 	ctx, cancel := context.WithTimeout(context.Background(), runDuration)
 	defer cancel()
 
 	var wg sync.WaitGroup
 	var writeCounter uint64
 
-	// --- Start Write Workers ---
+	// Start Write Workers
 	for i := 0; i < workerCount; i++ {
 		wg.Add(1)
 		go writeWorker(ctx, &wg, session, writeCounter, i)
 	}
 
-	// --- Start Read Worker ---
+	// Start Read Worker
 	wg.Add(1)
 	go readWorker(ctx, &wg, session)
 
-	// --- Wait for test to finish ---
 	wg.Wait()
 
-	// --- Print Final Results ---
+	// Print Final Results
 	totalWrites := atomic.LoadUint64(&writeCounter)
 	writesPerSecond := float64(totalWrites) / runDuration.Seconds()
 	log.Println("--------------------------------------------------")
@@ -89,14 +98,13 @@ func main() {
 	log.Println("--------------------------------------------------")
 }
 
-// writeWorker simulates a single client continuously writing data
 func writeWorker(ctx context.Context, wg *sync.WaitGroup, session *gocql.Session, writeCounter uint64, workerID int) {
 	defer wg.Done()
 	log.Printf("Write worker %d started", workerID)
 
 	for {
 		select {
-		case <-ctx.Done(): // Stop when the context is cancelled
+		case <-ctx.Done():
 			log.Printf("Write worker %d stopping", workerID)
 			return
 		default:
@@ -112,19 +120,19 @@ func writeWorker(ctx context.Context, wg *sync.WaitGroup, session *gocql.Session
 			err := session.Query(fmt.Sprintf(
 				`INSERT INTO %s (session_id, time, platform, asn, current_cdn, video_profile_kbps) VALUES (?, ?, ?, ?, ?, ?)`,
 				tableName),
-				data.SessionID, data.Time, data.Platform, data.ASN, data.CDN, data.Kbps).Exec()
+				data.SessionID.String(), data.Time, data.Platform, data.ASN, data.CDN, data.Kbps).Exec()
 
 			if err != nil {
 				log.Printf("Worker %d write error: %v", workerID, err)
 			} else {
 				atomic.AddUint64(&writeCounter, 1)
 			}
-			time.Sleep(10 * time.Millisecond) // Small delay to prevent overwhelming a single worker
+			time.Sleep(10 * time.Millisecond)
 		}
 	}
 }
 
-// readWorker periodically runs aggregation-style queries
+// readWorker periodically runs aggregation-style queries against a random ASN
 func readWorker(ctx context.Context, wg *sync.WaitGroup, session *gocql.Session) {
 	defer wg.Done()
 	log.Println("Read worker started")
@@ -136,10 +144,8 @@ func readWorker(ctx context.Context, wg *sync.WaitGroup, session *gocql.Session)
 			log.Println("Read worker stopping")
 			return
 		case <-ticker.C:
-			// ScyllaDB does not support server-side GROUP BY. The strategy is to
-			// fetch the required data and perform the aggregation client-side.
-			// This query simulates fetching data for a specific, high-traffic ASN.
-			queryASN := 3356 // Example ASN
+			// MODIFIED: Randomly pick an ASN from the list for each query
+			queryASN := queryASNs[rand.Intn(len(queryASNs))]
 
 			startTime := time.Now()
 			iter := session.Query(fmt.Sprintf(
@@ -147,7 +153,6 @@ func readWorker(ctx context.Context, wg *sync.WaitGroup, session *gocql.Session)
 				tableName),
 				queryASN, time.Now().Add(-1*time.Hour)).Iter()
 
-			// Client-side aggregation
 			cdnTraffic := make(map[string]int)
 			var cdn string
 			var kbps int

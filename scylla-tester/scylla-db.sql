@@ -1,6 +1,10 @@
 -- Create the keyspace for your project
 CREATE KEYSPACE IF NOT EXISTS content_steering
-WITH REPLICATION = { 'class' : 'SimpleStrategy', 'replication_factor' : 1 };
+WITH REPLICATION = {
+  'class' : 'NetworkTopologyStrategy',
+  'AWS_EU_WEST_1' : 3
+}
+AND TABLETS = {'enabled': false};
 
 -- Switch to the new keyspace
 USE content_steering;
