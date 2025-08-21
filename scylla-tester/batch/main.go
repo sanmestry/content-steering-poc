@@ -16,7 +16,7 @@ import (
 
 const (
 	runDuration  = 15 * time.Minute
-	workerCount  = 100
+	workerCount  = 1
 	readInterval = 10 * time.Second
 	keyspace     = "content_steering"
 	batchSize    = 20 // Batch size for inserts
