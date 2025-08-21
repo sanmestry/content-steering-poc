@@ -169,3 +169,10 @@ func readWorker(ctx context.Context, wg *sync.WaitGroup, session *gocql.Session)
 		}
 	}
 }
+
+// Duration: 15 minutes, Worker Count: 100
+// --------------------------------------------------
+// Load test finished.
+// Total writes: 7302684
+// Average ingest rate: 8114.09 writes/second
+// --------------------------------------------------

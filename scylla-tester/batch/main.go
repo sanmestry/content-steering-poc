@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"fmt"
 	"log"
 	"math/rand"
 	"os"
@@ -20,7 +19,6 @@ const (
 	workerCount  = 100 // Tune this value for your hardware
 	readInterval = 10 * time.Second
 	keyspace     = "content_steering"
-	tableName    = "content_sessions"
 	batchSize    = 20 // Batch size for inserts
 )
 
@@ -116,7 +114,7 @@ func writeWorker(ctx context.Context, wg *sync.WaitGroup, session *gocql.Session
 			log.Printf("Write worker %d stopping", workerID)
 			return
 		default:
-			batch := session.NewBatch(gocql.LoggedBatch)
+			batch := session.NewBatch(gocql.UnloggedBatch)
 			for i := 0; i < batchSize; i++ {
 				data := SessionData{
 					SessionID: uuid.New(),
@@ -153,9 +151,8 @@ func readWorker(ctx context.Context, wg *sync.WaitGroup, session *gocql.Session)
 			startTime := time.Now()
 			lookbackTime := time.Now().Add(-24 * time.Hour)
 
-			// Optimize: Use indexed columns and avoid ALLOW FILTERING if possible
-			iter := session.Query(fmt.Sprintf(
-				`SELECT current_cdn, video_profile_kbps FROM %s WHERE asn = ? AND time > ?`, tableName),
+			iter := session.Query(
+				`SELECT current_cdn, video_profile_kbps FROM content_sessions WHERE asn = ? AND time > ? ALLOW FILTERING`,
 				queryASN, lookbackTime).Iter()
 
 			cdnTraffic := make(map[string]int)
@@ -175,10 +172,3 @@ func readWorker(ctx context.Context, wg *sync.WaitGroup, session *gocql.Session)
 		}
 	}
 }
-
-// Duration: 15 minutes, Worker Count: 100
-// --------------------------------------------------
-// Load test finished.
-// Total writes: 7302684
-// Average ingest rate: 8114.09 writes/second
-// --------------------------------------------------
