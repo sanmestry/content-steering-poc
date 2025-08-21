@@ -128,6 +128,7 @@ func writeWorker(ctx context.Context, wg *sync.WaitGroup, session *gocql.Session
 	}
 }
 
+// readWorker periodically runs aggregation-style queries against a random ASN
 func readWorker(ctx context.Context, wg *sync.WaitGroup, session *gocql.Session) {
 	defer wg.Done()
 	log.Println("Read worker started")
@@ -140,25 +141,31 @@ func readWorker(ctx context.Context, wg *sync.WaitGroup, session *gocql.Session)
 			return
 		case <-ticker.C:
 			queryASN := queryASNs[rand.Intn(len(queryASNs))]
-
 			startTime := time.Now()
+
+			lookbackTime := time.Now().Add(-24 * time.Hour)
+
 			iter := session.Query(fmt.Sprintf(
 				`SELECT current_cdn, video_profile_kbps FROM %s WHERE asn = ? AND time > ? ALLOW FILTERING`,
 				tableName),
-				queryASN, time.Now().Add(-1*time.Hour)).Iter()
+				queryASN, lookbackTime).Iter()
 
 			cdnTraffic := make(map[string]int)
 			var cdn string
 			var kbps int
+
+			// NEW: Add a counter for scanned rows
+			rowCount := 0
 			for iter.Scan(&cdn, &kbps) {
 				cdnTraffic[cdn] += kbps
+				rowCount++
 			}
 
 			if err := iter.Close(); err != nil {
 				log.Printf("Read query error: %v", err)
 			} else {
 				latency := time.Since(startTime)
-				log.Printf("[Read Query] Latency: %v. Aggregated traffic for ASN %d: %v", latency, queryASN, cdnTraffic)
+				log.Printf("[Read Query] Latency: %v. Scanned %d rows. Aggregated traffic for ASN %d: %v", latency, rowCount, queryASN, cdnTraffic)
 			}
 		}
 	}
