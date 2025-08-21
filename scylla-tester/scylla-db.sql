@@ -1,0 +1,20 @@
+-- Create the keyspace for your project
+CREATE KEYSPACE IF NOT EXISTS content_steering
+WITH REPLICATION = { 'class' : 'SimpleStrategy', 'replication_factor' : 1 };
+
+-- Switch to the new keyspace
+USE content_steering;
+
+-- Create the table with an optimized primary key and a new index
+CREATE TABLE IF NOT EXISTS content_sessions (
+                                                session_id         uuid,
+                                                time               timestamp,
+                                                platform           text,         -- 'mobile', 'dotcom', or 'tv'
+                                                asn                int,
+                                                current_cdn        text,         -- The partition key
+                                                video_profile_kbps int,
+                                                PRIMARY KEY ((current_cdn), time, session_id)
+    ) WITH CLUSTERING ORDER BY (time DESC);
+
+-- Create an index to allow efficient lookups by ASN
+CREATE INDEX IF NOT EXISTS ON content_sessions (asn);
