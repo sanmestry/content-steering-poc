@@ -104,12 +104,10 @@ func main() {
 
 func writeWorker(ctx context.Context, wg *sync.WaitGroup, session *gocql.Session, writeCounter *uint64, workerID int) {
 	defer wg.Done()
-	log.Printf("Write worker %d started", workerID)
 
 	for {
 		select {
 		case <-ctx.Done():
-			log.Printf("Write worker %d stopping", workerID)
 			return
 		default:
 			batch := session.NewBatch(gocql.UnloggedBatch)
