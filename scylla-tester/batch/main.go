@@ -98,7 +98,7 @@ func main() {
 
 	writesPerSecond := float64(totalWriteCounter) / runDuration.Seconds()
 	log.Println("--------------------------------------------------")
-	log.Printf("(Batching Supported) Load test finished.")
+	log.Printf("(Dual Write) Load test finished.")
 	log.Printf("Total writes to each table: %d", totalWriteCounter)
 	log.Printf("Final average ingest rate: %.2f writes/second\n", writesPerSecond)
 	log.Println("--------------------------------------------------")
