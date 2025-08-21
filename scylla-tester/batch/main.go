@@ -133,14 +133,12 @@ func writeWorker(ctx context.Context, wg *sync.WaitGroup, session *gocql.Session
 }
 func readWorker(ctx context.Context, wg *sync.WaitGroup, session *gocql.Session) {
 	defer wg.Done()
-	log.Println("Read worker started")
 	ticker := time.NewTicker(readInterval)
 	defer ticker.Stop()
 
 	for {
 		select {
 		case <-ctx.Done():
-			log.Println("Read worker stopping")
 			return
 		case <-ticker.C:
 			queryASN := queryASNs[rand.Intn(len(queryASNs))]
