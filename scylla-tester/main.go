@@ -30,7 +30,6 @@ var (
 	queryASNs = []int{3356, 15169, 7922, 20115, 8121}
 )
 
-// SessionData simulates your session data
 type SessionData struct {
 	SessionID uuid.UUID
 	Time      time.Time
@@ -153,7 +152,6 @@ func readWorker(ctx context.Context, wg *sync.WaitGroup, session *gocql.Session)
 			var cdn string
 			var kbps int
 
-			// NEW: Add a counter for scanned rows
 			rowCount := 0
 			for iter.Scan(&cdn, &kbps) {
 				cdnTraffic[cdn] += kbps

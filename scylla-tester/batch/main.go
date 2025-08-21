@@ -16,7 +16,7 @@ import (
 
 const (
 	runDuration  = 15 * time.Minute
-	workerCount  = 100 // Tune this value for your hardware
+	workerCount  = 100
 	readInterval = 10 * time.Second
 	keyspace     = "content_steering"
 	batchSize    = 20 // Batch size for inserts
@@ -78,7 +78,6 @@ func main() {
 	wg.Add(1)
 	go readWorker(ctx, &wg, session)
 
-	// Resource monitoring hook (example)
 	go func() {
 		ticker := time.NewTicker(30 * time.Second)
 		defer ticker.Stop()
@@ -87,7 +86,6 @@ func main() {
 			case <-ctx.Done():
 				return
 			case <-ticker.C:
-				// Add custom resource monitoring here (CPU, memory, etc.)
 				log.Printf("[Monitor] Writes: %d", atomic.LoadUint64(&writeCounter))
 			}
 		}

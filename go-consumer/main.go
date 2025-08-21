@@ -14,7 +14,6 @@ import (
 	"github.com/segmentio/kafka-go"
 )
 
-// SessionData represents the updated structure of the JSON message from Kafka
 type SessionData struct {
 	Time             time.Time `json:"time"`
 	SessionID        string    `json:"session_id"`
@@ -94,7 +93,6 @@ func main() {
 	}
 }
 
-// processBatch handles inserting the batch into the database using pgx.CopyFrom
 func processBatch(batch []SessionData) error {
 	if len(batch) == 0 {
 		return nil

@@ -18,7 +18,6 @@ var (
 	topic   = "content_sessions"
 )
 
-// SessionData represents the structure of the JSON message
 type SessionData struct {
 	Time             time.Time `json:"time"`
 	SessionID        string    `json:"session_id"`
