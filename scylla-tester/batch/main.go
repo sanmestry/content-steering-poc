@@ -96,7 +96,7 @@ func main() {
 	totalWrites := atomic.LoadUint64(&writeCounter)
 	writesPerSecond := float64(totalWrites) / runDuration.Seconds()
 	log.Println("--------------------------------------------------")
-	log.Printf("Load test finished.")
+	log.Printf("(Batching Supported) Load test finished.")
 	log.Printf("Total writes: %d", totalWrites)
 	log.Printf("Average ingest rate: %.2f writes/second\n", writesPerSecond)
 	log.Println("--------------------------------------------------")
