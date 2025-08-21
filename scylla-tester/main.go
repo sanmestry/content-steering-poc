@@ -16,7 +16,7 @@ import (
 
 const (
 	runDuration  = 30 * time.Minute
-	workerCount  = 1
+	workerCount  = 10
 	readInterval = 10 * time.Second
 	keyspace     = "content_steering"
 	batchSize    = 100 // Increased batch size for higher throughput
@@ -166,13 +166,18 @@ func readWorker(ctx context.Context, wg *sync.WaitGroup, session *gocql.Session)
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			queryASN := queryASNs[rand.Intn(len(queryASNs))]
+			rand.Shuffle(len(queryASNs), func(i, j int) {
+				queryASNs[i], queryASNs[j] = queryASNs[j], queryASNs[i]
+			})
+			numToQuery := rand.Intn(len(queryASNs)-1) + 1
+			asnsToQuery := queryASNs[:numToQuery]
+
 			startTime := time.Now()
 			lookbackTime := time.Now().Add(-1 * time.Hour)
 
 			iter := session.Query(
-				`SELECT current_cdn, video_profile_kbps FROM sessions_by_asn WHERE asn = ? AND time > ?`,
-				queryASN, lookbackTime).Iter()
+				`SELECT current_cdn, video_profile_kbps FROM sessions_by_asn WHERE asn IN ? AND time > ?`,
+				asnsToQuery, lookbackTime).Iter()
 
 			cdnTraffic := make(map[string]int)
 			var cdn string
@@ -186,7 +191,7 @@ func readWorker(ctx context.Context, wg *sync.WaitGroup, session *gocql.Session)
 				log.Printf("Read query error: %v", err)
 			} else {
 				latency := time.Since(startTime)
-				log.Printf("[Read Query] Latency: %v. Scanned %d rows. Aggregated traffic for ASN %d: %v", latency, rowCount, queryASN, cdnTraffic)
+				log.Printf("[Read Query] Latency: %v. Scanned %d rows for ASNs %v. Aggregated traffic: %v", latency, rowCount, asnsToQuery, cdnTraffic)
 			}
 		}
 	}
