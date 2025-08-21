@@ -73,11 +73,11 @@ func main() {
 	defer cancel()
 
 	var wg sync.WaitGroup
-	var writeCounter uint64
+	var writeCounter uint64 = 0
 
 	for i := 0; i < workerCount; i++ {
 		wg.Add(1)
-		go writeWorker(ctx, &wg, session, writeCounter, i)
+		go writeWorker(ctx, &wg, session, &writeCounter, i)
 	}
 
 	wg.Add(1)
@@ -94,7 +94,7 @@ func main() {
 	log.Println("--------------------------------------------------")
 }
 
-func writeWorker(ctx context.Context, wg *sync.WaitGroup, session *gocql.Session, writeCounter uint64, workerID int) {
+func writeWorker(ctx context.Context, wg *sync.WaitGroup, session *gocql.Session, writeCounter *uint64, workerID int) {
 	defer wg.Done()
 	log.Printf("Write worker %d started", workerID)
 
@@ -121,7 +121,7 @@ func writeWorker(ctx context.Context, wg *sync.WaitGroup, session *gocql.Session
 			if err != nil {
 				log.Printf("Worker %d write error: %v", workerID, err)
 			} else {
-				atomic.AddUint64(&writeCounter, 1)
+				atomic.AddUint64(writeCounter, 1)
 			}
 			time.Sleep(10 * time.Millisecond)
 		}
@@ -133,6 +133,7 @@ func readWorker(ctx context.Context, wg *sync.WaitGroup, session *gocql.Session)
 	defer wg.Done()
 	log.Println("Read worker started")
 	ticker := time.NewTicker(readInterval)
+	defer ticker.Stop()
 
 	for {
 		select {
