@@ -16,10 +16,10 @@ import (
 
 const (
 	runDuration  = 15 * time.Minute
-	workerCount  = 1
+	workerCount  = 100
 	readInterval = 10 * time.Second
 	keyspace     = "content_steering"
-	batchSize    = 20 // Batch size for inserts
+	batchSize    = 100 // Increased batch size for higher throughput
 )
 
 var (
@@ -37,7 +37,9 @@ type SessionData struct {
 	Kbps      int
 }
 
-const insertQuery = `INSERT INTO content_sessions (session_id, time, platform, asn, current_cdn, video_profile_kbps) VALUES (?, ?, ?, ?, ?, ?)`
+// Separate constants for clarity
+const insertPrimaryQuery = `INSERT INTO content_sessions (session_id, time, platform, asn, current_cdn, video_profile_kbps) VALUES (?, ?, ?, ?, ?, ?)`
+const insertQueryTableQuery = `INSERT INTO sessions_by_asn (session_id, time, platform, asn, current_cdn, video_profile_kbps) VALUES (?, ?, ?, ?, ?, ?)`
 
 func main() {
 	scyllaHosts := os.Getenv("SCYLLA_HOSTS")
@@ -55,8 +57,8 @@ func main() {
 		Username: scyllaUser,
 		Password: scyllaPass,
 	}
-	cluster.NumConns = 10                          // Connection pooling
-	cluster.Compressor = &gocql.SnappyCompressor{} // Enable compression
+	cluster.NumConns = 10
+	cluster.Compressor = &gocql.SnappyCompressor{}
 
 	session, err := cluster.CreateSession()
 	if err != nil {
@@ -86,20 +88,13 @@ func main() {
 			case <-ctx.Done():
 				return
 			case <-ticker.C:
-				log.Printf("[Monitor] Writes: %d", atomic.LoadUint64(&writeCounter))
+				currentWrites := atomic.SwapUint64(&writeCounter, 0)
+				log.Printf("[Monitor] Writes/sec to each table: %.2f", float64(currentWrites)/30.0)
 			}
 		}
 	}()
 
 	wg.Wait()
-
-	totalWrites := atomic.LoadUint64(&writeCounter)
-	writesPerSecond := float64(totalWrites) / runDuration.Seconds()
-	log.Println("--------------------------------------------------")
-	log.Printf("(Batching Supported) Load test finished.")
-	log.Printf("Total writes: %d", totalWrites)
-	log.Printf("Average ingest rate: %.2f writes/second\n", writesPerSecond)
-	log.Println("--------------------------------------------------")
 }
 
 func writeWorker(ctx context.Context, wg *sync.WaitGroup, session *gocql.Session, writeCounter *uint64, workerID int) {
@@ -110,7 +105,9 @@ func writeWorker(ctx context.Context, wg *sync.WaitGroup, session *gocql.Session
 		case <-ctx.Done():
 			return
 		default:
-			batch := session.NewBatch(gocql.UnloggedBatch)
+			writeBatch := session.NewBatch(gocql.UnloggedBatch)
+			queryBatch := session.NewBatch(gocql.UnloggedBatch)
+
 			for i := 0; i < batchSize; i++ {
 				data := SessionData{
 					SessionID: uuid.New(),
@@ -120,17 +117,37 @@ func writeWorker(ctx context.Context, wg *sync.WaitGroup, session *gocql.Session
 					ASN:       rand.Intn(65000),
 					Kbps:      rand.Intn(15000) + 500,
 				}
-				batch.Query(insertQuery, data.SessionID.String(), data.Time, data.Platform, data.ASN, data.CDN, data.Kbps)
+				writeBatch.Query(insertPrimaryQuery, data.SessionID.String(), data.Time, data.Platform, data.ASN, data.CDN, data.Kbps)
+				queryBatch.Query(insertQueryTableQuery, data.SessionID.String(), data.Time, data.Platform, data.ASN, data.CDN, data.Kbps)
 			}
-			if err := session.ExecuteBatch(batch); err != nil {
-				log.Printf("Worker %d batch insert error: %v", workerID, err)
+
+			var batchWg sync.WaitGroup
+			batchWg.Add(2)
+			var batchErr error
+
+			go func() {
+				defer batchWg.Done()
+				if err := session.ExecuteBatch(writeBatch); err != nil {
+					batchErr = err
+				}
+			}()
+			go func() {
+				defer batchWg.Done()
+				if err := session.ExecuteBatch(queryBatch); err != nil {
+					batchErr = err
+				}
+			}()
+			batchWg.Wait()
+
+			if batchErr != nil {
+				log.Printf("Worker %d batch insert error: %v", workerID, batchErr)
 			} else {
 				atomic.AddUint64(writeCounter, batchSize)
 			}
-			time.Sleep(10 * time.Millisecond)
 		}
 	}
 }
+
 func readWorker(ctx context.Context, wg *sync.WaitGroup, session *gocql.Session) {
 	defer wg.Done()
 	ticker := time.NewTicker(readInterval)
@@ -146,7 +163,7 @@ func readWorker(ctx context.Context, wg *sync.WaitGroup, session *gocql.Session)
 			lookbackTime := time.Now().Add(-24 * time.Hour)
 
 			iter := session.Query(
-				`SELECT current_cdn, video_profile_kbps FROM content_sessions WHERE asn = ? AND time > ? ALLOW FILTERING`,
+				`SELECT current_cdn, video_profile_kbps FROM sessions_by_asn WHERE asn = ? AND time > ?`,
 				queryASN, lookbackTime).Iter()
 
 			cdnTraffic := make(map[string]int)
