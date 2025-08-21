@@ -37,8 +37,7 @@ type SessionData struct {
 	Kbps      int
 }
 
-// Separate constants for clarity
-const insertPrimaryQuery = `INSERT INTO content_sessions (session_id, time, platform, asn, current_cdn, video_profile_kbps) VALUES (?, ?, ?, ?, ?, ?)`
+const insertWriteQuery = `INSERT INTO content_sessions (session_id, time, platform, asn, current_cdn, video_profile_kbps) VALUES (?, ?, ?, ?, ?, ?)`
 const insertQueryTableQuery = `INSERT INTO sessions_by_asn (session_id, time, platform, asn, current_cdn, video_profile_kbps) VALUES (?, ?, ?, ?, ?, ?)`
 
 func main() {
@@ -70,11 +69,12 @@ func main() {
 	defer cancel()
 
 	var wg sync.WaitGroup
-	var writeCounter uint64
+	var periodicWriteCounter uint64
+	var totalWriteCounter uint64
 
 	for i := 0; i < workerCount; i++ {
 		wg.Add(1)
-		go writeWorker(ctx, &wg, session, &writeCounter, i)
+		go writeWorker(ctx, &wg, session, &periodicWriteCounter, &totalWriteCounter, i)
 	}
 
 	wg.Add(1)
@@ -88,16 +88,23 @@ func main() {
 			case <-ctx.Done():
 				return
 			case <-ticker.C:
-				currentWrites := atomic.SwapUint64(&writeCounter, 0)
-				log.Printf("[Monitor] Writes/sec to each table: %.2f", float64(currentWrites)/30.0)
+				currentWrites := atomic.SwapUint64(&periodicWriteCounter, 0)
+				log.Printf("[Monitor] Writes/sec in last 30s: %.2f", float64(currentWrites)/30.0)
 			}
 		}
 	}()
 
 	wg.Wait()
+
+	writesPerSecond := float64(totalWriteCounter) / runDuration.Seconds()
+	log.Println("--------------------------------------------------")
+	log.Printf("(Batching Supported) Load test finished.")
+	log.Printf("Total writes to each table: %d", totalWriteCounter)
+	log.Printf("Final average ingest rate: %.2f writes/second\n", writesPerSecond)
+	log.Println("--------------------------------------------------")
 }
 
-func writeWorker(ctx context.Context, wg *sync.WaitGroup, session *gocql.Session, writeCounter *uint64, workerID int) {
+func writeWorker(ctx context.Context, wg *sync.WaitGroup, session *gocql.Session, periodicCounter *uint64, totalCounter *uint64, workerID int) {
 	defer wg.Done()
 
 	for {
@@ -117,7 +124,7 @@ func writeWorker(ctx context.Context, wg *sync.WaitGroup, session *gocql.Session
 					ASN:       rand.Intn(65000),
 					Kbps:      rand.Intn(15000) + 500,
 				}
-				writeBatch.Query(insertPrimaryQuery, data.SessionID.String(), data.Time, data.Platform, data.ASN, data.CDN, data.Kbps)
+				writeBatch.Query(insertWriteQuery, data.SessionID.String(), data.Time, data.Platform, data.ASN, data.CDN, data.Kbps)
 				queryBatch.Query(insertQueryTableQuery, data.SessionID.String(), data.Time, data.Platform, data.ASN, data.CDN, data.Kbps)
 			}
 
@@ -142,7 +149,8 @@ func writeWorker(ctx context.Context, wg *sync.WaitGroup, session *gocql.Session
 			if batchErr != nil {
 				log.Printf("Worker %d batch insert error: %v", workerID, batchErr)
 			} else {
-				atomic.AddUint64(writeCounter, batchSize)
+				atomic.AddUint64(periodicCounter, batchSize)
+				atomic.AddUint64(totalCounter, batchSize)
 			}
 		}
 	}
@@ -160,7 +168,7 @@ func readWorker(ctx context.Context, wg *sync.WaitGroup, session *gocql.Session)
 		case <-ticker.C:
 			queryASN := queryASNs[rand.Intn(len(queryASNs))]
 			startTime := time.Now()
-			lookbackTime := time.Now().Add(-24 * time.Hour)
+			lookbackTime := time.Now().Add(-1 * time.Hour)
 
 			iter := session.Query(
 				`SELECT current_cdn, video_profile_kbps FROM sessions_by_asn WHERE asn = ? AND time > ?`,
