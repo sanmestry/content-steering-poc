@@ -27,7 +27,6 @@ const (
 var (
 	cdns      = []string{"Akamai", "Fastly", "Cloudfront", "Qwilt", "NetSkrt"}
 	platforms = []string{"mobile", "dotcom", "tv"}
-	// NEW: A list of ASNs to query for in the read worker
 	queryASNs = []int{3356, 15169, 7922, 20115, 8121}
 )
 
@@ -42,7 +41,6 @@ type SessionData struct {
 }
 
 func main() {
-	// --- Read all connection details from environment variables ---
 	scyllaHosts := os.Getenv("SCYLLA_HOSTS")
 	scyllaUser := os.Getenv("SCYLLA_USER")
 	scyllaPass := os.Getenv("SCYLLA_PASS")
